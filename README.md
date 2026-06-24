@@ -13,11 +13,11 @@ When using Hermes Agent's OpenAI-compatible API server (`/v1/chat/completions`) 
 
 ## Solution
 
-A minimal 26-line patch to `gateway/platforms/api_server.py` that:
+A minimal 35-line patch to `gateway/platforms/api_server.py` that:
 
 1. Wires a `reasoning_callback` in the streaming handler to accumulate reasoning text
 2. Passes it through `_run_agent()` → `_create_agent()` → `AIAgent()`
-3. Injects the accumulated `reasoning_content` into every `chat.completion.chunk` SSE delta
+3. Emits the accumulated reasoning as a `<thinking>` block in the SSE stream before the first content delta
 
 ## Installation
 
@@ -30,6 +30,21 @@ hermes gateway restart
 ## Update safety
 
 Hermes Agent preserves local modifications across updates via `git stash`. With the default config (`updates.non_interactive_local_changes: stash`), running `hermes update` will stash, pull, and auto-restore your changes.
+
+## How it works
+
+The patch adds 4 small changes to `gateway/platforms/api_server.py`:
+
+1. **`_create_agent()`**: Accepts and forwards `reasoning_callback` to `AIAgent()`
+2. **Streaming handler**: Defines `_on_reasoning()` callback that accumulates reasoning text
+3. **`_run_agent()`**: Accepts and forwards `reasoning_callback` through to `_create_agent()`
+4. **`_write_sse_chat_completion()` → `_emit()`**: Emits `<thinking>` block before first content delta
+
+## Compatibility
+
+- **Tested with:** Hermes Agent v0.17.0
+- **Models:** Any reasoning-capable model (e.g., `openrouter/owl-alpha`, `anthropic/claude-*`, `deepseek/*`)
+- **Clients:** Cline (VS Code), NextChat, any OpenAI-compatible client that parses `<thinking>` tags
 
 ## License
 
